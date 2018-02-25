@@ -3,6 +3,7 @@
 
 #include <gbrocker/core.h>
 #include <g0/service.h>
+#include <g0/test_service.h>
 #include <g0/gate/udp.h>
 
 #include <gxx/log/logger.h>
@@ -15,9 +16,20 @@
 gxx::log::stdout_target constgt;
 gxx::log::logger syslog("syslog");
 
+g0::udp_gate ugate;
+
 void udp_gate_callback_handler(int sig) {
 	syslog.trace("udp_gate_callback_handler");
+	ugate.read_handler();
 }
+
+class pubsub_service_t : public g0::service {
+	void on_input(g0::message* msg) override {
+		syslog.trace("msgservice::on_input");
+	}
+} pubsub;
+
+g0::echo_service echo("echo");
 
 int main(int argc, char* argv[]) {
 
@@ -38,10 +50,17 @@ int main(int argc, char* argv[]) {
 	else 			syslog.set_level(gxx::log::level::info);
 	syslog.debug("debug mode");
 
+	//Инициализация echo
+	g0::registry_service(&echo, 0);
+
+	//Инициализация pubsub
+	g0::registry_service(&pubsub, 1);
+
 	//Инициализация UDP шлюза системы g0.
 	int uport = opts.get_integer("port");
 	syslog.debug("udpgate port: {}", uport);
-	g0::udp_gate ugate(uport);
+	g0::registry_service(&ugate, 10);
+	ugate.init(uport);
 
 	//Перевод UDP шлюза в сигнальный режим.
 	int ufd = ugate.get_fd();
